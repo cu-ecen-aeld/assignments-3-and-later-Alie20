@@ -1,0 +1,25 @@
+# Variables
+CC = $(CROSS_COMPILE)gcc
+CFLAGS = -Wall -Wextra -O2
+TARGET = writer
+SRC = writer.c
+OBJ = writer.o
+
+# Default target
+all: $(TARGET)
+
+# Build target
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJ)
+
+# Rule for compiling .c files to .o files
+$(OBJ): $(SRC)
+	$(CC) $(CFLAGS) -c $(SRC) -o $(OBJ)
+
+# Clean target
+clean:
+	rm -f $(TARGET) $(OBJ)
+
+# Phony targets
+.PHONY: all clean
+
