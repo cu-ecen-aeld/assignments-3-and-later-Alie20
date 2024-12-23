@@ -9,7 +9,6 @@ jobs:
     unit-test:
         runs-on: ubuntu-latest
         container: cuaesd/aesd-autotest:24-unit-test
-        runs-on: ubuntu-latest
 
         steps:
           - uses: actions/checkout@v2
