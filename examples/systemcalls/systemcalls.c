@@ -16,7 +16,11 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
+	int ret_code = system(cmd);
+	if (ret_code == -1 )
+	{
+		return false;
+	}
     return true;
 }
 
@@ -60,8 +64,47 @@ bool do_exec(int count, ...)
 */
 
     va_end(args);
+    
+    //Fork A child process
+    pid_t pid = fork(); 
 
-    return true;
+	//Check the fork status
+    if (pid < 0) 
+    {
+        perror("fork");
+        return false;
+    }
+    else if (pid == 0) 
+    {
+        // Child process
+        execv(command[0], command);
+
+        // If execv returns, an error occurred
+        perror("execv");
+        exit(EXIT_FAILURE); // Exit child process with failure
+    } 
+    else 
+    {
+        // Parent process
+        int status;
+        if (waitpid(pid, &status, 0) == -1) 
+        {
+            perror("waitpid");
+            return false;
+        }
+
+        // Check if the child terminated successfully
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) 
+        {
+            return true;
+        } 
+        else 
+        {
+            fprintf(stderr, "Command failed with exit status: %d\n", WEXITSTATUS(status));
+            return false;
+        }
+    }
+
 }
 
 /**
@@ -73,27 +116,68 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 {
     va_list args;
     va_start(args, count);
-    char * command[count+1];
+    char *command[count + 1];
     int i;
-    for(i=0; i<count; i++)
-    {
+    
+    // Populate the command array
+    for (i = 0; i < count; i++) {
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
 
+    // Open the output file
+    int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd < 0) {
+        perror("open");
+        va_end(args);
+        return false;
+    }
 
-/*
- * TODO
- *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
- *   redirect standard out to a file specified by outputfile.
- *   The rest of the behaviour is same as do_exec()
- *
-*/
+    pid_t pid = fork();
+    if (pid < 0) {
+        // Fork failed
+        perror("fork");
+        close(fd);
+        va_end(args);
+        return false;
+    }
 
-    va_end(args);
+    if (pid == 0) {
+        // Child process
+        // Redirect stdout to the file
+        if (dup2(fd, STDOUT_FILENO) < 0) {
+            perror("dup2");
+            close(fd);
+            _exit(1);
+        }
 
-    return true;
+        // Close the file descriptor in the child process
+        close(fd);
+
+        // Execute the command
+        execv(command[0], command);
+        // If execv fails, exit the child process
+        perror("execv");
+        _exit(1);
+    } else {
+        // Parent process
+        int status;
+        close(fd); // Close the file descriptor in the parent process
+
+        // Wait for the child process to complete
+        if (waitpid(pid, &status, 0) == -1) {
+            perror("waitpid");
+            va_end(args);
+            return false;
+        }
+
+        // Check if the child process exited successfully
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            va_end(args);
+            return true;
+        } else {
+            va_end(args);
+            return false;
+        }
+    }
 }
