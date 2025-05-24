@@ -4,6 +4,8 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h> // For access()
+#include <sys/stat.h>
+#include <sys/types.h>
 
 // Function to create a directory if it does not exist
 int create_directory(const char *dir) {
