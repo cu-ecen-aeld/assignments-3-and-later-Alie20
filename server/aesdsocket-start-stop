@@ -1,0 +1,58 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:          aesdsocket
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:
+# Default-Stop:
+# Short-Description: Start/stop aesdsocket daemon
+### END INIT INFO
+
+DAEMON_PATH=$(pwd)
+DAEMON="$DAEMON_PATH/aesdsocket"
+DAEMON_OPTS="-d"
+PIDFILE="/var/run/aesdsocket.pid"
+LOGFILE="/var/log/aesdsocket.log"
+
+start() {
+    echo "Starting aesdsocket..."
+    start-stop-daemon --start --background --make-pidfile --pidfile "$PIDFILE" \
+        --exec "$DAEMON" -- $DAEMON_OPTS
+}
+
+stop() {
+    echo "Stopping aesdsocket..."
+    start-stop-daemon --stop --pidfile "$PIDFILE" --retry 5
+    rm -f "$PIDFILE"
+}
+
+status() {
+    if [ -f "$PIDFILE" ]; then
+        echo "aesdsocket is running (PID=$(cat $PIDFILE))"
+    else
+        echo "aesdsocket is not running"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        status
+        ;;
+    restart)
+        stop
+        sleep 1
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status|restart}"
+        exit 1
+esac
+
+exit 0
