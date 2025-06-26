@@ -4,7 +4,7 @@ SRCS = aesdsocket.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 # Compiler settings
-CXX ?= g++
+CXX ?= $(CROSS_COMPILE)g++
 CXXFLAGS ?= -Wall -Wextra -Werror -std=c++11
 
 # Output binary
