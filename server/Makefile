@@ -1,11 +1,11 @@
 
 TARGET = aesdsocket
-SRCS = aesdsocket.cpp
-OBJS = $(SRCS:.cpp=.o)
+SRCS = aesdsocket.c
+OBJS = $(SRCS:.c=.o)
 
 # Compiler settings
-CXX ?= $(CROSS_COMPILE)g++
-CXXFLAGS ?= -Wall -Wextra -Werror -std=c++11
+CXX ?= $(CROSS_COMPILE)c
+CXXFLAGS ?= -Wall -Wextra -Werror 
 
 # Output binary
 OUTDIR = .
@@ -21,7 +21,7 @@ default: all
 $(BIN): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-%.o: %.cpp
+%.o: %.c
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
