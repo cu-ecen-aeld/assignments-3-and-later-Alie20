@@ -9,11 +9,11 @@
 # Short-Description: Start/stop aesdsocket daemon
 ### END INIT INFO
 
-DAEMON_PATH=$(pwd)
-DAEMON="$DAEMON_PATH/aesdsocket"
+DAEMON="/usr/bin/aesdsocket"
 DAEMON_OPTS="-d"
 PIDFILE="/var/run/aesdsocket.pid"
 LOGFILE="/var/log/aesdsocket.log"
+
 
 start() {
     echo "Starting aesdsocket..."
