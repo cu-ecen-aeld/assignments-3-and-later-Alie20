@@ -1,11 +1,17 @@
+ifdef CROSS_COMPILE
+ifneq ($(CROSS_COMPILE), aarch64-none-linux-gnu-)
+$(error '$(CROSS_COMPILE)' is not supported!)
+endif
+endif
 
 TARGET = aesdsocket
 SRCS = aesdsocket.c
 OBJS = $(SRCS:.c=.o)
 
 # Compiler settings
-CXX ?= $(CROSS_COMPILE)c
-CXXFLAGS ?= -Wall -Wextra -Werror 
+CC ?= $(CROSS_COMPILE)gcc
+CFLAGS ?= -Wall -Wextra -Werror
+
 
 # Output binary
 OUTDIR = .
@@ -19,10 +25,10 @@ all: $(BIN)
 default: all
 
 $(BIN): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^
 
 %.o: %.c
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJS) $(BIN)
