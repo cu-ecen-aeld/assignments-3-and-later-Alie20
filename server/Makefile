@@ -1,9 +1,3 @@
-#ifdef CROSS_COMPILE
-#ifneq ($(CROSS_COMPILE), aarch64-none-linux-gnu-)
-#$(error '$(CROSS_COMPILE)' is not supported!)
-#endif
-#endif
-
 TARGET = aesdsocket
 SRCS = aesdsocket.c
 OBJS = $(SRCS:.c=.o)
@@ -12,6 +6,15 @@ OBJS = $(SRCS:.c=.o)
 CC ?= $(CROSS_COMPILE)gcc
 CFLAGS ?= -Wall -Wextra -Werror
 
+# --------------------------------------------------
+# 🔧 Assignment 8 build option
+# --------------------------------------------------
+# Default: use /dev/aesdchar for reads/writes
+USE_AESD_CHAR_DEVICE ?= 1
+
+# Pass the macro to compiler
+CFLAGS += -DUSE_AESD_CHAR_DEVICE=$(USE_AESD_CHAR_DEVICE)
+# --------------------------------------------------
 
 # Output binary
 OUTDIR = .
