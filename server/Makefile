@@ -1,8 +1,8 @@
-ifdef CROSS_COMPILE
-ifneq ($(CROSS_COMPILE), aarch64-none-linux-gnu-)
-$(error '$(CROSS_COMPILE)' is not supported!)
-endif
-endif
+#ifdef CROSS_COMPILE
+#ifneq ($(CROSS_COMPILE), aarch64-none-linux-gnu-)
+#$(error '$(CROSS_COMPILE)' is not supported!)
+#endif
+#endif
 
 TARGET = aesdsocket
 SRCS = aesdsocket.c
