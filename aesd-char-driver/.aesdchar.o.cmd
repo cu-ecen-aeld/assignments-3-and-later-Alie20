@@ -1,0 +1,1 @@
+savedcmd_/home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/aesdchar.o := ld -m elf_x86_64 -z noexecstack   -r -o /home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/aesdchar.o @/home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/aesdchar.mod 

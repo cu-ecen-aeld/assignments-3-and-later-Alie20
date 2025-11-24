@@ -1,0 +1,1 @@
+savedcmd_/home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/Module.symvers -T /home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/modules.order -i Module.symvers -e 

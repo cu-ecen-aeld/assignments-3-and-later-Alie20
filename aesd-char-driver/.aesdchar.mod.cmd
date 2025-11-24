@@ -1,0 +1,1 @@
+savedcmd_/home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/aesdchar.mod := printf '%s\n'   aesd-circular-buffer.o main.o | awk '!x[$$0]++ { print("/home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/"$$0) }' > /home/alie/Desktop/EmbeddedLinux_part1/assignments-3-and-later-Alie20/aesd-char-driver/aesdchar.mod
