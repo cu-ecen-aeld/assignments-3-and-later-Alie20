@@ -11,11 +11,14 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <stdarg.h>
+#include <sys/ioctl.h>
+
+#include "aesd_ioctl.h"     // MUST match struct aesd_seekto + ioctl definition
 
 #define PORT 9000
 #define DEBUG_LOG_PATH "/var/log/aesdsocket_debug.log"
 
-
+// Buildroot will define USE_AESD_CHAR_DEVICE=1
 #if USE_AESD_CHAR_DEVICE
 #define FILE_PATH "/dev/aesdchar"
 #else
@@ -63,7 +66,7 @@ void daemonize()
     }
 
     if (pid > 0) {
-        exit(EXIT_SUCCESS); // parent exits
+        exit(EXIT_SUCCESS);
     }
 
     if (setsid() < 0) {
@@ -85,9 +88,8 @@ int main(int argc, char *argv[])
     int opt;
 
     while ((opt = getopt(argc, argv, "d")) != -1) {
-        if (opt == 'd') {
-            run_as_daemon = 1;
-        } else {
+        if (opt == 'd') run_as_daemon = 1;
+        else {
             fprintf(stderr, "Usage: %s [-d]\n", argv[0]);
             exit(EXIT_FAILURE);
         }
@@ -97,10 +99,9 @@ int main(int argc, char *argv[])
     openlog("aesdsocket", LOG_PID, LOG_USER);
     log_debug("=== aesdsocket starting (USE_AESD_CHAR_DEVICE=%d) ===", USE_AESD_CHAR_DEVICE);
 
-    if (run_as_daemon) {
-        daemonize();
-    }
+    if (run_as_daemon) daemonize();
 
+    // Create socket
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         perror("socket");
@@ -108,11 +109,7 @@ int main(int argc, char *argv[])
     }
 
     int optval = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
-        perror("setsockopt");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
@@ -135,9 +132,9 @@ int main(int argc, char *argv[])
     }
 
     syslog(LOG_INFO, "Server listening on port %d", PORT);
-    log_debug("Server listening on port %d", PORT);
 
     while (!stop) {
+
         int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
         if (client_fd < 0) {
             if (stop) break;
@@ -148,27 +145,20 @@ int main(int argc, char *argv[])
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
         syslog(LOG_INFO, "Accepted connection from %s", client_ip);
-        log_debug("Accepted connection from %s", client_ip);
 
         char recv_buffer[1024];
         size_t total_size = 0;
         char *packet_buffer = NULL;
-        int fd = -1; // Lazy open
+        int fd = -1;   // open lazily on first newline
 
-        while (1) {
+        while (!stop) {
+
             ssize_t bytes_received = recv(client_fd, recv_buffer, sizeof(recv_buffer), 0);
-            if (bytes_received <= 0) break;
-            log_debug("Received %zd bytes: '%.*s'", bytes_received, (int)bytes_received, recv_buffer);
+            if (bytes_received <= 0)
+                break;
 
             char *temp = realloc(packet_buffer, total_size + bytes_received + 1);
-            if (!temp) {
-                syslog(LOG_ERR, "Memory allocation failed");
-                log_debug("Memory allocation failed");
-                free(packet_buffer);
-                packet_buffer = NULL;
-                total_size = 0;
-                break;
-            }
+            if (!temp) { free(packet_buffer); break; }
 
             packet_buffer = temp;
             memcpy(packet_buffer + total_size, recv_buffer, bytes_received);
@@ -177,64 +167,73 @@ int main(int argc, char *argv[])
 
             char *newline_ptr;
             while ((newline_ptr = strchr(packet_buffer, '\n')) != NULL) {
+
                 size_t packet_len = newline_ptr - packet_buffer + 1;
-                log_debug("Newline detected, writing %zu bytes to %s", packet_len, FILE_PATH);
 
                 if (fd == -1) {
-		#if USE_AESD_CHAR_DEVICE
- 	   	fd = open(FILE_PATH, O_RDWR);
-		#else
-		    fd = open(FILE_PATH, O_RDWR | O_CREAT | O_APPEND, 0666);
-		#endif
-		    if (fd == -1) {
-			syslog(LOG_ERR, "Failed to open %s: %s", FILE_PATH, strerror(errno));
-			log_debug("Failed to open %s: %s", FILE_PATH, strerror(errno));
-			break;
-		    }
-		}
-
-                ssize_t written = write(fd, packet_buffer, packet_len);
-                if (written < 0) {
-                    syslog(LOG_ERR, "write() failed: %s", strerror(errno));
-                    log_debug("write() failed: %s", strerror(errno));
-                    break;
+#if USE_AESD_CHAR_DEVICE
+                    fd = open(FILE_PATH, O_RDWR);
+#else
+                    fd = open(FILE_PATH, O_RDWR | O_CREAT | O_APPEND, 0666);
+#endif
+                    if (fd == -1) break;
                 }
 
-                log_debug("Wrote %zd bytes, sending back data from %s", written, FILE_PATH);
+                // -----------------------------------------
+                //   CHECK IF PACKET IS IOCTL COMMAND
+                // -----------------------------------------
+                if (!strncmp(packet_buffer, "AESDCHAR_IOCSEEKTO:", 20)) {
 
-                // Use low-level read for /dev/aesdchar
-                lseek(fd, 0, SEEK_SET);
-                char file_buf[1024];
-                ssize_t bytes;
-                while ((bytes = read(fd, file_buf, sizeof(file_buf))) > 0) {
-                    send(client_fd, file_buf, bytes, 0);
-                    log_debug("Sent %zd bytes to client", bytes);
-                }
+#if USE_AESD_CHAR_DEVICE
+                    struct aesd_seekto seekto;
 
-#if !USE_AESD_CHAR_DEVICE
-                lseek(fd, 0, SEEK_SET);
+                    if (sscanf(packet_buffer + 20, "%u,%u",
+                               &seekto.write_cmd,
+                               &seekto.write_cmd_offset) == 2) {
+
+                        ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
+
+                        // now read after ioctl (NO lseek)
+                        char file_buf[1024];
+                        ssize_t r;
+                        while ((r = read(fd, file_buf, sizeof(file_buf))) > 0) {
+                            send(client_fd, file_buf, r, 0);
+                        }
+                    }
 #endif
 
+                } else {
+                    // -----------------------------------------
+                    //   NORMAL DATA WRITE
+                    // -----------------------------------------
+                    write(fd, packet_buffer, packet_len);
+
+                    // For real file only, go back to start
+#if !USE_AESD_CHAR_DEVICE
+                    lseek(fd, 0, SEEK_SET);
+#endif
+
+                    char file_buf[1024];
+                    ssize_t r;
+                    while ((r = read(fd, file_buf, sizeof(file_buf))) > 0)
+                        send(client_fd, file_buf, r, 0);
+                }
+
+                // Remove processed packet
                 size_t remaining = total_size - packet_len;
                 memmove(packet_buffer, packet_buffer + packet_len, remaining);
                 total_size = remaining;
 
-                char *temp2 = realloc(packet_buffer, total_size + 1);
-                if (temp2) packet_buffer = temp2;
-                packet_buffer[total_size] = '\0';
+                packet_buffer = realloc(packet_buffer, total_size + 1);
+                if (packet_buffer)
+                    packet_buffer[total_size] = '\0';
             }
         }
 
+        if (fd != -1) close(fd);
         free(packet_buffer);
-        if (fd != -1)
-            close(fd);
         close(client_fd);
-        syslog(LOG_INFO, "Closed connection from %s", client_ip);
-        log_debug("Closed connection from %s", client_ip);
     }
-
-    syslog(LOG_INFO, "Caught signal, exiting");
-    log_debug("Caught signal, exiting");
 
     close(server_fd);
 
@@ -243,7 +242,6 @@ int main(int argc, char *argv[])
 #endif
 
     closelog();
-    log_debug("=== aesdsocket exited cleanly ===");
     return 0;
 }
 
