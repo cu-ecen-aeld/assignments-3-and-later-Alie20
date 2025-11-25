@@ -216,9 +216,10 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
     struct aesd_dev *dev = filp->private_data;
     struct aesd_seekto seekto;
-    struct aesd_buffer_entry *entry;
-    uint8_t index = 0;
+    struct aesd_buffer_entry *entry = NULL;
+    uint8_t index;
     loff_t new_pos = 0;
+    size_t current_cmd = 0;
 
     if (cmd != AESDCHAR_IOCSEEKTO)
         return -ENOTTY;
@@ -229,26 +230,20 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     if (mutex_lock_interruptible(&dev->lock))
         return -ERESTARTSYS;
 
-    /* Validate command index */
-    entry = aesd_circular_buffer_find_entry(&dev->buffer, seekto.write_cmd);
-    if (!entry || !entry->buffptr) {
-        mutex_unlock(&dev->lock);
-        return -EINVAL;
-    }
-
-    /* Validate offset */
-    if (seekto.write_cmd_offset >= entry->size) {
-        mutex_unlock(&dev->lock);
-        return -EINVAL;
-    }
-
-    /* Compute absolute position */
+    /* Find entry corresponding to write_cmd */
     AESD_CIRCULAR_BUFFER_FOREACH(entry, &dev->buffer, index) {
-        if (index == seekto.write_cmd)
+        if (current_cmd == seekto.write_cmd)
             break;
-        new_pos += entry->size;
+        new_pos += entry->size;  // accumulate size until reaching the command
+        current_cmd++;
     }
 
+    if (!entry || !entry->buffptr || seekto.write_cmd_offset >= entry->size) {
+        mutex_unlock(&dev->lock);
+        return -EINVAL;
+    }
+
+    /* Absolute offset = bytes before this entry + offset inside this entry */
     new_pos += seekto.write_cmd_offset;
 
     filp->f_pos = new_pos;
@@ -256,6 +251,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     mutex_unlock(&dev->lock);
     return new_pos;
 }
+
 
 /* ---------------- FILE OPERATIONS ---------------------- */
 
