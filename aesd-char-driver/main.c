@@ -19,6 +19,7 @@
 #include <linux/fs.h> // file_operations
 #include "aesdchar.h"
 #include <linux/errno.h>
+#include "aesd_ioctl.h"
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
@@ -112,53 +113,45 @@ ssize_t aesd_read(struct file *filp, char __user *buf,
 {
     struct aesd_dev *dev = filp->private_data;
     ssize_t retval = 0;
-    size_t copied = 0;
+
+    if (!dev)
+        return -EINVAL;
 
     if (mutex_lock_interruptible(&dev->lock))
         return -ERESTARTSYS;
 
-    size_t entry_offset;
-    struct aesd_buffer_entry *entry;
-    uint8_t index;
+    while (count > 0) {
+        size_t entry_offset = 0;
 
-    // find the first entry and offset for the current f_pos
-    entry = aesd_circular_buffer_find_entry_offset_for_fpos(
-                &dev->buffer, *f_pos, &entry_offset);
-    if (!entry)
-        goto out; // nothing to read
+        struct aesd_buffer_entry *entry =
+            aesd_circular_buffer_find_entry_offset_for_fpos(
+                    &dev->buffer, *f_pos, &entry_offset);
 
-    // determine index of that entry
-    index = aesd_circular_buffer_find_entry_index_for_fpos(
-                &dev->buffer, *f_pos);
-    
-    while (count > 0 && entry && entry->buffptr) {
+        if (!entry) {
+            /* No more data available */
+            break;
+        }
+
         size_t bytes_available = entry->size - entry_offset;
-        size_t bytes_to_copy = (bytes_available > count) ? count : bytes_available;
+        size_t bytes_to_copy = (bytes_available > count) ?
+                                count : bytes_available;
 
-        if (copy_to_user(buf + copied,
-                         entry->buffptr + entry_offset,
-                         bytes_to_copy))
-        {
+        if (copy_to_user(buf, entry->buffptr + entry_offset, bytes_to_copy)) {
             retval = -EFAULT;
             goto out;
         }
 
-        copied       += bytes_to_copy;
-        *f_pos       += bytes_to_copy;
-        count        -= bytes_to_copy;
-
-        // move to next entry in the circular buffer
-        index = (index + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
-        entry = &dev->buffer.entry[index];
-        entry_offset = 0;
+        buf     += bytes_to_copy;
+        count   -= bytes_to_copy;
+        *f_pos  += bytes_to_copy;
+        retval  += bytes_to_copy;
     }
-
-    retval = copied;
 
 out:
     mutex_unlock(&dev->lock);
     return retval;
 }
+
 /* ----------------------- LLSEEK ------------------------ */
 
 loff_t aesd_llseek(struct file *filp, loff_t offset, int whence)
