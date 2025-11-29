@@ -210,7 +210,6 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     struct aesd_dev *dev = filp->private_data;
     struct aesd_seekto seekto;
     struct aesd_buffer_entry *entry = NULL;
-    uint8_t index;
     loff_t new_pos = 0;
     size_t current_cmd = 0;
 
@@ -224,11 +223,26 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         return -ERESTARTSYS;
 
     /* Find entry corresponding to write_cmd */
-    AESD_CIRCULAR_BUFFER_FOREACH(entry, &dev->buffer, index) {
-        if (current_cmd == seekto.write_cmd)
-            break;
-        new_pos += entry->size;  // accumulate size until reaching the command
-        current_cmd++;
+    /* Iterate in the same order as read operations (from out_offs, wrapping around) */
+    int max_entries = dev->buffer.full ? AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED
+                                       : dev->buffer.in_offs;
+    int entries_checked = 0;
+    int index = dev->buffer.out_offs;
+    
+    while (entries_checked < max_entries) {
+        entry = &dev->buffer.entry[index];
+        
+        /* Only count valid entries */
+        if (entry->buffptr) {
+            if (current_cmd == seekto.write_cmd)
+                break;
+            new_pos += entry->size;  // accumulate size until reaching the command
+            current_cmd++;
+        }
+        
+        /* Move to next entry (wrap around if needed) */
+        index = (index + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        entries_checked++;
     }
 
     if (!entry || !entry->buffptr || seekto.write_cmd_offset >= entry->size) {
@@ -242,7 +256,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     filp->f_pos = new_pos;
 
     mutex_unlock(&dev->lock);
-    return new_pos;
+    return 0;
 }
 
 
